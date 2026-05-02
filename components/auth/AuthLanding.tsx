@@ -49,9 +49,7 @@ export function AuthLanding() {
         </div>
 
         <p className="mt-14 max-w-sm text-xs leading-relaxed text-teal-900/65 dark:text-zinc-500">
-          Demo: use <span className="rounded bg-white/70 px-1 font-mono text-emerald-900 dark:bg-zinc-800 dark:text-zinc-300">adminxyz@football.com</span>{" "}
-          with password <span className="rounded bg-white/70 px-1 font-mono text-emerald-900 dark:bg-zinc-800 dark:text-zinc-300">12345</span> on the
-          login screen for admin tools. Any other credentials behave as a player account.
+          
         </p>
       </div>
     </div>
