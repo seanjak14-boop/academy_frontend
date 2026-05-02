@@ -115,12 +115,6 @@ export function LoginForm() {
               Sign up
             </Link>
           </p>
-          <p className="mt-4 rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50 p-3 text-center text-[11px] leading-relaxed text-teal-900/80 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-500">
-            Demo admin: <span className="font-mono text-zinc-700 dark:text-zinc-300">adminxyz@football.com</span> /{" "}
-            <span className="font-mono text-zinc-700 dark:text-zinc-300">12345</span>
-            <br />
-            Any other email or phone logs in as a player.
-          </p>
         </div>
         <p className="mt-8 text-center text-xs text-zinc-400">
           <Link href="/" className="hover:underline">
