@@ -15,13 +15,13 @@ export default function AdminStudentsPage() {
   const [feeStatus, setFeeStatus] = useState<"paid" | "pending">("pending");
   const [presentToday, setPresentToday] = useState(false);
 
-  function onAdd(e: React.FormEvent) {
+  async function onAdd(e: React.FormEvent) {
     e.preventDefault();
     const fn = firstName.trim();
     const ln = lastName.trim();
     if (!fn || !ln) return;
     const amount = Number(feeAmount);
-    addStudent({
+    await addStudent({
       name: `${fn} ${ln}`,
       tier,
       presentToday,
@@ -137,7 +137,7 @@ export default function AdminStudentsPage() {
               </div>
               <button
                 type="button"
-                onClick={() => removeStudent(s.id)}
+                onClick={() => void removeStudent(s.id)}
                 className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 transition hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/70"
               >
                 Remove

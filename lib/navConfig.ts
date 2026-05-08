@@ -14,12 +14,17 @@ export const ADMIN_NAV: NavItem[] = [
 export const STUDENT_NAV: NavItem[] = [
   { href: "/announcements", label: "Announcements" },
   { href: "/tournaments", label: "Upcoming matches" },
+  { href: "/fees", label: "My fees" },
 ];
 
 export function isStudentAllowedPath(pathname: string): boolean {
   return (
+    pathname === "/welcome" ||
+    pathname.startsWith("/welcome/") ||
     pathname === "/announcements" ||
     pathname.startsWith("/announcements/") ||
+    pathname === "/fees" ||
+    pathname.startsWith("/fees/") ||
     pathname === "/tournaments" ||
     pathname.startsWith("/tournaments/")
   );

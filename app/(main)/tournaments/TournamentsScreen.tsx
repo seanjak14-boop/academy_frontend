@@ -1,20 +1,45 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/academy/PageHeader";
 import { StatCard } from "@/components/academy/StatCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatMatchDate } from "@/lib/dates";
-import { matches } from "@/lib/mockData";
+import { matches as seedMatches } from "@/lib/mockData";
+import type { Match } from "@/lib/mockData";
+import { apiGet } from "@/lib/apiClient";
 
 export function TournamentsScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const [rows, setRows] = useState<Match[]>(seedMatches);
 
-  const upcoming = [...matches.filter((m) => m.status === "upcoming")].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      try {
+        const data = await apiGet<{ ok: boolean; matches?: Match[] }>("/api/matches");
+        if (!mounted) return;
+        if (data.ok && Array.isArray(data.matches)) {
+          setRows(data.matches);
+        }
+      } catch {
+        // keep seed fallback
+      }
+    }
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const upcoming = useMemo(
+    () => [...rows.filter((m) => m.status === "upcoming")].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [rows],
   );
-  const done = [...matches.filter((m) => m.status === "completed")].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  const done = useMemo(
+    () => [...rows.filter((m) => m.status === "completed")].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [rows],
   );
 
   return (
@@ -24,7 +49,7 @@ export function TournamentsScreen() {
         description={
           isAdmin
             ? "Academy-affiliated fixtures: upcoming diary plus recent results."
-            : "Fixtures involving XYZ Academy squads — kick-off times are indicative (demo data)."
+            : "Fixtures involving XYZ Academy squads — kick-off times are indicative."
         }
       />
 
@@ -34,7 +59,7 @@ export function TournamentsScreen() {
           <StatCard label="Played (sample window)" value={done.length} />
           <StatCard
             label="Competitions tracked"
-            value={new Set(matches.map((m) => m.competition)).size}
+            value={new Set(rows.map((m) => m.competition)).size}
             hint="Friendlies grouped separately"
           />
         </div>
@@ -60,7 +85,7 @@ function MatchSection({
   tone: "future" | "past";
   eyebrow: string;
   subtitle: string;
-  rows: typeof matches;
+  rows: Match[];
 }) {
   const titleCls = tone === "future" ? "text-emerald-700 dark:text-emerald-300" : "text-zinc-800 dark:text-zinc-200";
 
@@ -80,7 +105,7 @@ function MatchSection({
       <div className="space-y-4">
         {rows.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-zinc-300 px-6 py-12 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-500">
-            No fixtures in this list yet — seed your calendar backend when ready.
+            No fixtures in this list yet.
           </p>
         ) : (
           rows.map((m) => (

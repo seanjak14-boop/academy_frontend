@@ -1,18 +1,88 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/academy/PageHeader";
 import { StatCard } from "@/components/academy/StatCard";
 import { joinedAgo } from "@/lib/dates";
 import type { Student } from "@/lib/mockData";
+import { useAuth } from "@/contexts/AuthContext";
 import { useStudents } from "@/contexts/StudentsContext";
+import { apiGet, apiPost } from "@/lib/apiClient";
 
 export default function FeesPage() {
   const { students } = useStudents();
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string>("");
+  const [myInvoices, setMyInvoices] = useState<
+    Array<{ id: number; status: string; amount: string | number; period_start: string; paid_at?: string | null }>
+  >([]);
+
+  const isAdmin = user?.role === "admin";
   const paid = students.filter((s) => s.feeStatus === "paid");
   const pending = students.filter((s) => s.feeStatus === "pending");
   const outstanding = pending.reduce((sum, p) => sum + p.feeAmount, 0);
   const n = students.length;
   const rate = n ? Math.round((paid.length / n) * 100) : 0;
+  const firstPendingId = useMemo(() => (pending.length > 0 ? Number(pending[0].id) : null), [pending]);
+
+  async function generateMonthlyInvoices() {
+    setLoading(true);
+    setMessage("");
+    try {
+      const data = await apiPost<{ ok: boolean; createdCount: number; scannedPlayers: number }>(
+        "/api/finance/invoices/generate-monthly",
+        {},
+      );
+      setMessage(`Generated ${data.createdCount} invoices after scanning ${data.scannedPlayers} players.`);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Failed to generate invoices.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function markOneInvoicePaid() {
+    if (!firstPendingId) {
+      setMessage("No pending student in this list to map quickly. Use backend invoice id from admin panel API.");
+      return;
+    }
+    setLoading(true);
+    setMessage("");
+    try {
+      await apiPost("/api/finance/invoices/mark-paid", { invoiceId: firstPendingId });
+      setMessage(`Invoice ${firstPendingId} marked paid.`);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Failed to mark paid.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadMyPaymentHistory() {
+    setLoading(true);
+    setMessage("");
+    try {
+      const data = await apiGet<{
+        ok: boolean;
+        data?: {
+          paymentHistory?: Array<{
+            id: number;
+            status: string;
+            amount: string | number;
+            period_start: string;
+            paid_at?: string | null;
+          }>;
+        };
+      }>("/api/auth/my-data");
+      setMyInvoices(data.data?.paymentHistory || []);
+      setMessage("Loaded your payment history.");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Failed to load your payment history.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <>
@@ -35,6 +105,51 @@ export default function FeesPage() {
       <section className="grid gap-8 lg:grid-cols-2">
         <FeeColumn title="Pending follow-up" subtitle="Reminder queue" badge="attention" rows={pending} />
         <FeeColumn title="Cleared invoices" subtitle="Good standing" badge="paid" rows={paid} />
+      </section>
+
+      <section className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900/30">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Backend billing actions</h2>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
+          These buttons are wired to your new backend billing APIs.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          {isAdmin ? (
+            <>
+              <button
+                onClick={() => void generateMonthlyInvoices()}
+                disabled={loading}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                Generate monthly invoices
+              </button>
+              <button
+                onClick={() => void markOneInvoicePaid()}
+                disabled={loading}
+                className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100 disabled:opacity-60"
+              >
+                Mark one invoice paid
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => void loadMyPaymentHistory()}
+              disabled={loading}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Load my payment history
+            </button>
+          )}
+        </div>
+        {message ? <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">{message}</p> : null}
+        {!isAdmin && myInvoices.length > 0 ? (
+          <ul className="mt-4 space-y-2 text-sm">
+            {myInvoices.map((inv) => (
+              <li key={inv.id} className="rounded-lg bg-zinc-100 px-3 py-2 dark:bg-zinc-800/60">
+                Invoice #{inv.id} • {inv.status} • £{Number(inv.amount)} • {new Date(inv.period_start).toDateString()}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </section>
     </>
   );

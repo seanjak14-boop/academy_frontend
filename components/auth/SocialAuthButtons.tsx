@@ -9,7 +9,7 @@ export function SocialAuthButtons() {
   const router = useRouter();
 
   function goPortal() {
-    router.push("/announcements");
+    router.push("/welcome");
   }
 
   const btn =

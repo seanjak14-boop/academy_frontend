@@ -28,22 +28,22 @@ export function SignupForm() {
 
   useEffect(() => {
     if (!isReady || !user) return;
-    router.replace("/announcements");
+    router.replace("/welcome");
   }, [user, isReady, router]);
 
   if (!isReady || user) {
     return <AuthSplash />;
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const res = signupWithPassword({ email, phone, firstName, lastName, password });
+    const res = await signupWithPassword({ email, phone, firstName, lastName, password });
     if (!res.ok) {
       setError(res.message);
       return;
     }
-    router.push("/announcements");
+    router.push("/welcome");
   }
 
   return (

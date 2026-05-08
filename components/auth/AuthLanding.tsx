@@ -47,13 +47,6 @@ export function AuthLanding() {
             Log in
           </Link>
         </div>
-<<<<<<< HEAD
-
-        <p className="mt-14 max-w-sm text-xs leading-relaxed text-teal-900/65 dark:text-zinc-500">
-          
-        </p>
-=======
->>>>>>> 328e45d (gsdfhfh)
       </div>
     </div>
   );

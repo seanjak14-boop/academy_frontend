@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Announcement } from "@/lib/mockData";
 import { AnnouncementComposer } from "@/components/announcements/AnnouncementComposer";
 import { formatAnnouncementDate } from "@/lib/dates";
+import { apiPost } from "@/lib/apiClient";
 
 let nextId = 1000;
 
@@ -16,12 +17,30 @@ export function AnnouncementsView({
 }) {
   const [items, setItems] = useState(initial);
 
+  useEffect(() => {
+    setItems(initial);
+  }, [initial]);
+
   const sorted = useMemo(
     () => [...items].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [items],
   );
 
-  function addPost(payload: Omit<Announcement, "id">) {
+  async function addPost(payload: Omit<Announcement, "id">) {
+    try {
+      const data = await apiPost<{ ok: boolean; announcement?: Announcement; message?: string }>(
+        "/api/announcements",
+        payload,
+      );
+      if (data.ok && data.announcement) {
+        const created = data.announcement;
+        setItems((prev) => [created, ...prev]);
+        return;
+      }
+    } catch {
+      // fallback below
+    }
+
     setItems((prev) => [{ id: `local-${nextId++}`, ...payload }, ...prev]);
   }
 
@@ -33,7 +52,7 @@ export function AnnouncementsView({
         <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Bulletin board</h2>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
           {showComposer
-            ? "Visible to players & parents — chronological feed (draft content for review)."
+            ? "Visible to players & parents — chronological feed."
             : "Official updates from XYZ Academy staff."}
         </p>
         <ul className="mt-10 space-y-6">
@@ -65,7 +84,7 @@ export function AnnouncementsView({
 
       {showComposer ? (
         <div className="lg:sticky lg:top-28 lg:self-start">
-          <AnnouncementComposer onPost={addPost} />
+          <AnnouncementComposer onPost={(payload) => void addPost(payload)} />
         </div>
       ) : null}
     </div>

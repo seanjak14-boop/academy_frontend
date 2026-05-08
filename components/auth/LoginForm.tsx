@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { ADMIN_EMAIL, ADMIN_PASSWORD } from "@/lib/authConstants";
 import { Logo } from "@/components/academy/Logo";
 import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -26,24 +25,22 @@ export function LoginForm() {
 
   useEffect(() => {
     if (!isReady || !user) return;
-    router.replace(user.role === "admin" ? "/dashboard" : "/announcements");
+    router.replace("/welcome");
   }, [user, isReady, router]);
 
   if (!isReady || user) {
     return <AuthSplash />;
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const res = loginWithPassword(identifier, password);
+    const res = await loginWithPassword(identifier, password);
     if (!res.ok) {
       setError(res.message);
       return;
     }
-    const isAdmin =
-      identifier.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() && password === ADMIN_PASSWORD;
-    router.push(isAdmin ? "/dashboard" : "/announcements");
+    router.push("/welcome");
   }
 
   return (

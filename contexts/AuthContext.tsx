@@ -8,9 +8,10 @@ import {
   useMemo,
   useState,
 } from "react";
-import { ADMIN_EMAIL, ADMIN_PASSWORD, AUTH_STORAGE_KEY } from "@/lib/authConstants";
+import { AUTH_STORAGE_KEY } from "@/lib/authConstants";
+import { apiGet, apiPost } from "@/lib/apiClient";
 
-export type UserRole = "admin" | "student";
+export type UserRole = "admin" | "student" | "coach" | "parent";
 
 export type AuthUser = {
   id: string;
@@ -25,28 +26,23 @@ export type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null;
   isReady: boolean;
-  loginWithPassword: (identifier: string, password: string) => { ok: true } | { ok: false; message: string };
+  loginWithPassword: (
+    identifier: string,
+    password: string,
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
   signupWithPassword: (input: {
     email: string;
     phone: string;
     firstName: string;
     lastName: string;
     password: string;
-  }) => { ok: true } | { ok: false; message: string };
+  }) => Promise<{ ok: true } | { ok: false; message: string }>;
   loginWithGoogle: () => void;
   loginWithTwitter: () => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-function normalizeEmail(e: string) {
-  return e.trim().toLowerCase();
-}
-
-function isLikelyEmail(s: string) {
-  return s.includes("@");
-}
 
 function readStoredUser(): AuthUser | null {
   if (typeof window === "undefined") return null;
@@ -67,52 +63,61 @@ function persistUser(user: AuthUser | null) {
   else localStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
+type AuthResponse = { ok: true; user: AuthUser } | { ok: false; message: string };
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    setUser(readStoredUser());
-    setIsReady(true);
+    let mounted = true;
+
+    async function boot() {
+      try {
+        const data = await apiGet<{ ok: true; user: AuthUser | null }>("/api/auth/me");
+        if (!mounted) return;
+        if (data.ok && data.user) {
+          setUser(data.user);
+          persistUser(data.user);
+        } else {
+          setUser(readStoredUser());
+        }
+      } catch {
+        if (!mounted) return;
+        setUser(readStoredUser());
+      } finally {
+        if (mounted) setIsReady(true);
+      }
+    }
+
+    void boot();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const loginWithPassword = useCallback((identifier: string, password: string) => {
+  const loginWithPassword = useCallback(async (identifier: string, password: string) => {
     const idRaw = identifier.trim();
     if (!idRaw || !password) {
       return { ok: false as const, message: "Enter your email or phone and password." };
     }
 
-    if (isLikelyEmail(idRaw)) {
-      const email = normalizeEmail(idRaw);
-      if (email === normalizeEmail(ADMIN_EMAIL) && password === ADMIN_PASSWORD) {
-        const admin: AuthUser = {
-          id: "admin",
-          email: ADMIN_EMAIL,
-          firstName: "Academy",
-          lastName: "Admin",
-          role: "admin",
-          provider: "email",
-        };
-        setUser(admin);
-        persistUser(admin);
-        return { ok: true as const };
-      }
+    try {
+      const data = await apiPost<AuthResponse>("/api/auth/login", {
+        identifier: idRaw,
+        password,
+      });
+      if (!data.ok) return { ok: false as const, message: data.message };
+      setUser(data.user);
+      persistUser(data.user);
+      return { ok: true as const };
+    } catch {
+      return { ok: false as const, message: "Unable to login right now." };
     }
-
-    const student: AuthUser = {
-      id: `student-${crypto.randomUUID()}`,
-      email: isLikelyEmail(idRaw) ? idRaw.trim() : "",
-      phone: isLikelyEmail(idRaw) ? undefined : idRaw,
-      role: "student",
-      provider: "email",
-    };
-    setUser(student);
-    persistUser(student);
-    return { ok: true as const };
   }, []);
 
   const signupWithPassword = useCallback(
-    (input: {
+    async (input: {
       email: string;
       phone: string;
       firstName: string;
@@ -127,18 +132,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { ok: false as const, message: "Please fill in every field." };
       }
 
-      const student: AuthUser = {
-        id: `student-${crypto.randomUUID()}`,
-        email,
-        phone,
-        firstName,
-        lastName,
-        role: "student",
-        provider: "email",
-      };
-      setUser(student);
-      persistUser(student);
-      return { ok: true as const };
+      try {
+        const data = await apiPost<AuthResponse>("/api/auth/signup", {
+          email,
+          phone,
+          firstName,
+          lastName,
+          password: input.password,
+        });
+        if (!data.ok) return { ok: false as const, message: data.message };
+        setUser(data.user);
+        persistUser(data.user);
+        return { ok: true as const };
+      } catch {
+        return { ok: false as const, message: "Unable to sign up right now." };
+      }
     },
     [],
   );
@@ -169,7 +177,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persistUser(u);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await apiPost<{ ok: boolean }>("/api/auth/logout", {});
+    } catch {
+      // Keep local cleanup even if network fails.
+    }
     setUser(null);
     persistUser(null);
   }, []);

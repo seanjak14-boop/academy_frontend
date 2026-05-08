@@ -1,19 +1,49 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/academy/PageHeader";
 import { StatCard } from "@/components/academy/StatCard";
 import { useStudents } from "@/contexts/StudentsContext";
+import { apiGet } from "@/lib/apiClient";
 import { formatMatchDate } from "@/lib/dates";
 
 export default function DashboardPage() {
   const { students } = useStudents();
+  const [summary, setSummary] = useState<{
+    totalRevenueCollectedThisMonth: number;
+    topAttendancePlayers: Array<{ playerId: number; playerName: string; attendancePercentage: number }>;
+    nextMatch: null | { home: string; away: string; startsAt: string };
+  } | null>(null);
   const total = students.length;
   const presentToday = students.filter((s) => s.presentToday).length;
   const newCount = students.filter((s) => s.tier === "new").length;
   const intCount = students.filter((s) => s.tier === "intermediate").length;
   const proCount = students.filter((s) => s.tier === "professional").length;
   const pct = total > 0 ? Math.round((presentToday / total) * 100) : 0;
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadSummary() {
+      try {
+        const data = await apiGet<{
+          ok: boolean;
+          summary?: {
+            totalRevenueCollectedThisMonth: number;
+            topAttendancePlayers: Array<{ playerId: number; playerName: string; attendancePercentage: number }>;
+            nextMatch: null | { home: string; away: string; startsAt: string };
+          };
+        }>("/api/dashboard/summary");
+        if (mounted && data.ok && data.summary) setSummary(data.summary);
+      } catch {
+        // dashboard summary is role-gated on backend; keep UI resilient
+      }
+    }
+    void loadSummary();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <>
@@ -47,6 +77,25 @@ export default function DashboardPage() {
           hint="Squads grouped by pathway"
         />
       </div>
+      {summary ? (
+        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            label="Revenue this month"
+            value={`£${summary.totalRevenueCollectedThisMonth}`}
+            hint="Live from billing records"
+          />
+          <StatCard
+            label="Top attendance"
+            value={summary.topAttendancePlayers[0]?.playerName || "N/A"}
+            hint={`${summary.topAttendancePlayers[0]?.attendancePercentage ?? 0}% this month`}
+          />
+          <StatCard
+            label="Next match"
+            value={summary.nextMatch ? `${summary.nextMatch.home} vs ${summary.nextMatch.away}` : "No upcoming match"}
+            hint={summary.nextMatch ? formatMatchDate(summary.nextMatch.startsAt) : "Schedule pending"}
+          />
+        </div>
+      ) : null}
 
       <section className="mt-12 grid gap-6 lg:grid-cols-[1fr,minmax(0,320px)]">
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900/30">

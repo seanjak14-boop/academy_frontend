@@ -10,64 +10,72 @@ import {
 } from "react";
 import type { Student } from "@/lib/mockData";
 import { students as seedStudents } from "@/lib/mockData";
-import { STUDENTS_STORAGE_KEY } from "@/lib/authConstants";
+import { apiDelete, apiGet, apiPost } from "@/lib/apiClient";
 
 type StudentsContextValue = {
   students: Student[];
-  addStudent: (input: Omit<Student, "id" | "joinedAt"> & { joinedAt?: string }) => Student;
-  removeStudent: (id: string) => void;
+  addStudent: (input: Omit<Student, "id" | "joinedAt"> & { joinedAt?: string }) => Promise<Student>;
+  removeStudent: (id: string) => Promise<void>;
   replaceStudents: (next: Student[]) => void;
 };
 
 const StudentsContext = createContext<StudentsContextValue | null>(null);
 
-function readStudents(): Student[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(STUDENTS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Student[];
-    if (!Array.isArray(parsed)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeStudents(list: Student[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(list));
-}
-
 export function StudentsProvider({ children }: { children: React.ReactNode }) {
   const [students, setStudents] = useState<Student[]>([]);
-  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const stored = readStudents();
-    setStudents(stored ?? [...seedStudents]);
-    setHydrated(true);
+    let mounted = true;
+    async function loadStudents() {
+      try {
+        const data = await apiGet<{ ok: boolean; students?: Student[]; message?: string }>("/api/students");
+        if (!mounted) return;
+        if (data.ok && Array.isArray(data.students)) {
+          setStudents(data.students);
+        } else {
+          setStudents([...seedStudents]);
+        }
+      } catch {
+        if (!mounted) return;
+        setStudents([...seedStudents]);
+      }
+    }
+    void loadStudents();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    writeStudents(students);
-  }, [students, hydrated]);
-
   const addStudent = useCallback(
-    (input: Omit<Student, "id" | "joinedAt"> & { joinedAt?: string }) => {
-      const row: Student = {
+    async (input: Omit<Student, "id" | "joinedAt"> & { joinedAt?: string }) => {
+      const payload = {
         ...input,
-        id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         joinedAt: input.joinedAt ?? new Date().toISOString(),
       };
-      setStudents((prev) => [...prev, row]);
-      return row;
+      try {
+        const data = await apiPost<{ ok: boolean; student?: Student; message?: string }>("/api/students", payload);
+        if (!data.ok || !data.student) throw new Error(data.message || "Failed to add student");
+        const created = data.student;
+        setStudents((prev) => [...prev, created]);
+        return created;
+      } catch {
+        const fallback: Student = {
+          ...payload,
+          id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        };
+        setStudents((prev) => [...prev, fallback]);
+        return fallback;
+      }
     },
     [],
   );
 
-  const removeStudent = useCallback((id: string) => {
+  const removeStudent = useCallback(async (id: string) => {
+    try {
+      await apiDelete<{ ok: boolean }>(`/api/students/${id}`);
+    } catch {
+      // keep optimistic removal in fallback mode
+    }
     setStudents((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
